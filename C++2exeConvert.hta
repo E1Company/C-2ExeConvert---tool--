@@ -1,0 +1,236 @@
+<html>
+  <head>
+    <title>C++2exeConvert</title>
+    <HTA:APPLICATION
+      ID="MinGWCompiler"
+      APPLICATIONNAME="MinGW G++ Compiler"
+      BORDER="thick"
+      CAPTION="yes"
+      SHOWINTASKBAR="yes"
+      SINGLEINSTANCE="yes"
+      WINDOWSTATE="normal" />
+    <style type="text/css">
+      /* Use Segoe UI for a modern Windows 10 feel */
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background-color: #f3f3f3;
+        margin: 0;
+        padding: 20px;
+      }
+      .container {
+        background-color: #ffffff;
+        border: 1px solid #cccccc;
+        padding: 20px;
+        max-width: 600px;
+        margin: auto;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+      }
+      h1 {
+        font-size: 22px;
+        text-align: center;
+        margin-bottom: 20px;
+        color: #0078d7;
+      }
+      p {
+        font-size: 14px;
+        color: #333333;
+      }
+      label {
+        font-size: 14px;
+        margin: 5px 0;
+        display: block;
+      }
+      input[type="text"] {
+        width: 80%;
+        padding: 6px;
+        font-size: 14px;
+        margin-bottom: 10px;
+        border: 1px solid #ccc;
+        border-radius: 2px;
+      }
+      button {
+        background-color: #0078d7;
+        color: #ffffff;
+        border: none;
+        padding: 8px 14px;
+        font-size: 14px;
+        border-radius: 2px;
+        cursor: pointer;
+        margin: 5px 0;
+      }
+      button:hover {
+        background-color: #005a9e;
+      }
+      input[type="radio"] {
+        margin-right: 5px;
+      }
+      .section {
+        margin-bottom: 20px;
+      }
+      .fileGroup {
+        display: flex;
+        align-items: center;
+      }
+      .fileGroup input[type="text"] {
+        flex: 1;
+      }
+      .fileGroup button {
+        margin-left: 10px;
+        padding: 6px 10px;
+      }
+      /* Hidden file input */
+      input[type="file"] {
+        display: none;
+      }
+    </style>
+    <script type="text/javascript">
+      var shell, fso;
+      function init() {
+        try {
+          shell = new ActiveXObject("WScript.Shell");
+          fso = new ActiveXObject("Scripting.FileSystemObject");
+        } catch (e) {
+          alert("Error: ActiveX objects not available. This must be run on Windows with HTA enabled.");
+        }
+      }
+      
+      // Runs the npm install command if MinGW isn't installed.
+      function runNpmInstall() {
+        try {
+          shell.Run('cmd /c npm install --global windows-build-tools', 1, true);
+          alert("Installation attempted. Please verify that MinGW G++ is installed.");
+        } catch (e) {
+          alert("Error running npm install: " + e.message);
+        }
+      }
+      
+      // Trigger the hidden file input (for both .cpp and .ico)
+      function browseFile(controlId) {
+        document.getElementById(controlId).click();
+      }
+      
+      // Set the value of the read-only textbox based on the chosen file.
+      function setFilePath(fileControlId, textControlId) {
+        var fullPath = document.getElementById(fileControlId).value;
+        document.getElementById(textControlId).value = fullPath;
+      }
+      
+      // Compile the file (and icon if provided)
+      function compileFile() {
+        // First, check the MinGW installed radio button.
+        var isMingwYes = document.getElementById("mingwYes").checked;
+        var isMingwNo = document.getElementById("mingwNo").checked;
+        if (isMingwNo) {
+          runNpmInstall();
+        }
+        
+        // Get C++ file path from textbox and ensure it is selected.
+        var cppFilePath = document.getElementById("cppFilePath").value;
+        if (cppFilePath.trim() === "") {
+          alert("Please select a C++ file.");
+          return;
+        }
+        
+        // Use FileSystemObject to get folder and base name.
+        var folderPath = fso.GetParentFolderName(cppFilePath);
+        var baseName = fso.GetBaseName(cppFilePath);
+        var cppFilename = fso.GetFileName(cppFilePath);
+        
+        // Get the optional icon file path.
+        var iconPath = document.getElementById("iconFilePath").value;
+        
+        if (iconPath.trim() !== "") {
+          // Create a temporary resource file in the same folder.
+          var rcFilePath = folderPath + "\\temp_icon.rc";
+          try {
+            var file = fso.CreateTextFile(rcFilePath, true);
+            file.WriteLine('myicon ICON DISCARDABLE "' + iconPath + '"');
+            file.Close();
+          } catch (e) {
+            alert("Error creating resource file: " + e.message);
+            return;
+          }
+          // Compile the resource file to an object file using windres.
+          var windresCommand =
+            'cmd /c cd /d "' + folderPath + '" && windres temp_icon.rc -O coff -o temp_icon.o';
+          try {
+            shell.Run(windresCommand, 1, true);
+          } catch (e) {
+            alert("Error running windres: " + e.message);
+            return;
+          }
+          // Compile the C++ file with the resource.
+          var compileCommand =
+            'cmd /c cd /d "' + folderPath + '" && g++ -o "' + baseName + '.exe" "' + cppFilename + '" temp_icon.o';
+          try {
+            shell.Run(compileCommand, 1, true);
+          } catch (e) {
+            alert("Error during compilation: " + e.message);
+            return;
+          }
+          // Delete the temporary resource files.
+          try {
+            fso.DeleteFile(rcFilePath);
+            fso.DeleteFile(folderPath + "\\temp_icon.o");
+          } catch (e) {
+            // Ignore cleanup errors.
+          }
+          alert("Compilation attempted with icon. Check folder: " + folderPath);
+        } else {
+          // Compile without the icon.
+          var compileCommand =
+            'cmd /c cd /d "' + folderPath + '" && g++ -o "' + baseName + '.exe" "' + cppFilename + '"';
+          try {
+            shell.Run(compileCommand, 1, true);
+          } catch (e) {
+            alert("Error during compilation: " + e.message);
+            return;
+          }
+          alert("Compilation attempted without icon. Check folder: " + folderPath);
+        }
+      }
+    </script>
+  </head>
+  <body onload="init();">
+    <div class="container">
+      <h1>C++2exeConvert</h1>
+      <p>
+        Your C++ file must reside in your Downloads folder. Please make sure MinGW G++ is installed.
+      </p>
+      
+      <!-- MinGW Installation Section -->
+      <div class="section">
+        <label>Do you have MinGW G++ installed?</label>
+        <input type="radio" id="mingwYes" name="mingwInstalled" value="yes" checked>
+        <label for="mingwYes" style="display:inline; font-weight:normal;">Yes</label>
+        <input type="radio" id="mingwNo" name="mingwInstalled" value="no">
+        <label for="mingwNo" style="display:inline; font-weight:normal;">No</label>
+      </div>
+      
+      <!-- C++ File Selection Section -->
+      <div class="section">
+        <label for="cppFilePath">Select C++ File (.cpp):</label>
+        <div class="fileGroup">
+          <input type="text" id="cppFilePath" readonly placeholder="C:\Users\...Downloads\YourFile.cpp">
+          <button onclick="browseFile('cppFileChooser');">Browse</button>
+          <input type="file" id="cppFileChooser" accept=".cpp" onchange="setFilePath('cppFileChooser','cppFilePath');">
+        </div>
+      </div>
+      
+      <!-- Icon File Selection Section (Optional) -->
+      <div class="section">
+        <label for="iconFilePath">Select Icon File (.ico) (optional):</label>
+        <div class="fileGroup">
+          <input type="text" id="iconFilePath" readonly placeholder="C:\Path\To\Icon.ico">
+          <button onclick="browseFile('iconFileChooser');">Browse</button>
+          <input type="file" id="iconFileChooser" accept=".ico" onchange="setFilePath('iconFileChooser','iconFilePath');">
+        </div>
+      </div>
+      
+      <!-- Convert Button -->
+      <div class="section">
+        <button onclick="compileFile();" style="width:100%;">Convert to EXE</button>
+      </div>
+    </div>
+  </body>
+</html>
